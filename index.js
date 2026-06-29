@@ -1,7 +1,10 @@
+require('dotenv').config()        // ← 最先載入！
 const express = require('express')
 const cors = require('cors')
 const morgan = require('morgan')
+const Person = require('./models/person')  // ← 載入 Person model
 const app = express()
+
 app.use(cors())
 app.use(express.static('dist'))
 app.use(express.json())
@@ -14,57 +17,43 @@ morgan.token('body', (request) => {
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms :body'))
 
 
-
-let persons = [
-  { id: "1", name: "Arto Hellas", number: "040-123456" },
-  { id: "2", name: "Ada Lovelace", number: "39-44-5323523" },
-  { id: "3", name: "Dan Abramov", number: "12-43-234345" },
-  { id: "4", name: "Mary Poppendieck", number: "39-23-6423122" }
-]
-
 // Exercise 3.1
 // 建立一個 route：
 // GET /api/persons
 // 回傳所有 persons 資料（JSON 格式）
-app.get('/api/persons', (request, response) =>{
-    return response.json(persons)
+app.get('/api/persons', (request, response) => {
+  Person.find({}).then(persons => {
+    response.json(persons)
+  })
 })
 
 
-// Exercise 3.2
-// 建立一個 route：
-// GET /info
-// 回傳兩件事：
-//   1. "Phonebook has info for X people"（X 是 persons 的數量）
-//   2. 現在的時間（用 new Date() 取得）
-app.get('/info', (request, response) => {
-    const count = persons.length
-    const reply = `Phonebook has info for ${count} people`
-    return(
-        response.send(`${reply} <br> ${new Date()}`)
-        
-    )
-})
-
-// GET /api/persons/:id
-// 如果找到 → 回傳該筆資料
-// 如果找不到 → 回傳 404
-app.get('/api/persons/:id', (request, response) => {
-  const id = request.params.id
-  const found = persons.find(p => p.id === id)
-  if (found){
-    response.json(found)
-    } else {
-        response.status(404).end()
-    }
+app.get('/info', (request, response, next) => {
+  Person.countDocuments({})
+    .then(count => {
+      response.send(`Phonebook has info for ${count} people <br> ${new Date()}`)
     })
+    .catch(error => next(error))
+})
 
-// DELETE /api/persons/:id
-// 刪除成功 → 回傳狀態碼 204，沒有內容
-app.delete('/api/persons/:id', (request, response) => {
-  const id = request.params.id
-  persons = persons.filter(p => p.id !== id)
-  return response.status(204).end()
+app.get('/api/persons/:id', (request, response, next) => {
+  Person.findById(request.params.id)
+    .then(person => {
+      if (person) {
+        response.json(person)
+      } else {
+        response.status(404).end()
+      }
+    })
+    .catch(error => next(error))
+})
+
+app.delete('/api/persons/:id', (request, response, next) => {
+  Person.findByIdAndDelete(request.params.id)
+    .then(result => {
+      response.status(204).end()
+    })
+    .catch(error => next(error))
 })
 
 // POST /api/persons
@@ -73,29 +62,50 @@ app.delete('/api/persons/:id', (request, response) => {
 // 把新資料加進 persons
 // 回傳新增的資料
 app.post('/api/persons', (request, response) => {
-    const body = request.body
-        // 驗證：name 或 number 是空的
-    if (!body.name || ! body.number) {
-        return response.status(400).json({ error: 'The number or name is empty' })
-    }
+  const body = request.body
 
-    // 驗證：name 已存在
-    if (persons.find(p => p.name === body.name)) {
-        return response.status(400).json({ error: 'The person is already existed' })
-    }
-    const newPerson = {
-        name: body.name, 
-        number: body.number,
-        id: String(Math.round(Math.random() * 10000))
-    }
-    persons = persons.concat(newPerson)
-    response.json(newPerson)
+  if (!body.name || !body.number) {
+    return response.status(400).json({ error: 'The number or name is empty' })
+  }
+
+  const person = new Person({
+    name: body.name,
+    number: body.number,
+  })
+
+  person.save().then(savedPerson => {
+    response.json(savedPerson)
+  })
 })
 
 
+app.put('/api/persons/:id', (request, response, next) => {
+  const { name, number } = request.body
+
+  Person.findByIdAndUpdate(
+    request.params.id,
+    { name, number },
+    { new: true, runValidators: true, context: 'query' }
+  )
+    .then(updatedPerson => {
+      response.json(updatedPerson)
+    })
+    .catch(error => next(error))
+})
 
 
+const errorHandler = (error, request, response, next) => {
+  console.error(error.message)
 
+  if (error.name === 'CastError') {
+    return response.status(400).send({ error: 'malformatted id' })
+  }
+
+  next(error)
+}
+
+
+app.use(errorHandler)  // ← 必須放在所有 route 的後面！
 
 
 const PORT = process.env.PORT || 3001
