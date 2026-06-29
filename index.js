@@ -50,7 +50,7 @@ app.get('/api/persons/:id', (request, response, next) => {
 
 app.delete('/api/persons/:id', (request, response, next) => {
   Person.findByIdAndDelete(request.params.id)
-    .then(result => {
+    .then(() => {
       response.status(204).end()
     })
     .catch(error => next(error))
@@ -61,7 +61,7 @@ app.delete('/api/persons/:id', (request, response, next) => {
 // 產生新的 id（用 Math.random() 產生隨機數字，教材建議這樣做）
 // 把新資料加進 persons
 // 回傳新增的資料
-app.post('/api/persons', (request, response) => {
+app.post('/api/persons', (request, response, next) => {
   const body = request.body
 
   if (!body.name || !body.number) {
@@ -73,9 +73,11 @@ app.post('/api/persons', (request, response) => {
     number: body.number,
   })
 
-  person.save().then(savedPerson => {
-    response.json(savedPerson)
-  })
+  person.save()
+    .then(savedPerson => {
+      response.json(savedPerson)
+    })
+    .catch(error => next(error))  // ← 加上這個！
 })
 
 
@@ -99,6 +101,8 @@ const errorHandler = (error, request, response, next) => {
 
   if (error.name === 'CastError') {
     return response.status(400).send({ error: 'malformatted id' })
+  } else if (error.name === 'ValidationError') {
+    return response.status(400).json({ error: error.message })
   }
 
   next(error)

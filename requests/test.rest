@@ -51,3 +51,32 @@ Content-Type: application/json
   "name": "John Smith",
   "number": "050-1234567"
 }
+
+
+### 測試驗證：name 太短（應該回傳 400）
+POST http://localhost:3001/api/persons
+Content-Type: application/json
+
+{
+  "name": "AB",
+  "number": "040-1234567"
+}
+
+
+### 測試電話格式驗證：格式錯誤（應該回傳 400）
+POST http://localhost:3001/api/persons
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "number": "1234556"
+}
+
+### 測試合法電話號碼
+POST http://localhost:3001/api/persons
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "number": "040-1234567"
+}
